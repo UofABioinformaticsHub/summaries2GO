@@ -31,7 +31,7 @@ The information contained for each GO term is:
 - The *longest path* back to the root node of the relevant ontology
 - Whether the GO term is a *terminal node* (i.e. it has no children)
 
-The main object created is available [here](../data/goSummaries.RDS) and this will load as a `tibble`.
+The main object created is available for download  [here](https://github.com/UofABioinformaticsHub/summaries2GO/data/goSummaries.RDS?raw=true) and this will load as a `tibble` after using the function `read_rds()` (fro the package `readr`)
 
 ## Create the Basic Graphs
 
@@ -172,7 +172,7 @@ goSummaries %>%
 write_rds(goSummaries, "../data/goSummaries.RDS")
 ```
 
-The summaries obtained above can be downloaded from [here](../data/goSummaries.RDS).
+The summaries obtained above can be downloaded from [here](https://github.com/UofABioinformaticsHub/summaries2GO/data/goSummaries.RDS?raw=true).
 Place this in the appropriate folder and the object can then be imported using `read_rds("path/to/goSummaries.RDS")`
 
 ## Session Info
