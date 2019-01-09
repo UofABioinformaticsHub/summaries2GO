@@ -187,7 +187,7 @@ myDE <- get("GO:0005795", org.Hs.egGO2ALLEGS) %>% sample(50)
 goResults <- goana(myDE, species = "Hs")
 ```
 
-If we leave these as is, there will be a few high=level GO terms which are relatively meaningless, as well as GO terms not present in our DE genes.
+If we leave these as is, there will be a few high-level GO terms which are relatively meaningless, as well as GO terms not present in our DE genes.
 These can easily be seen at the top of [the Ancestor Chart for this term](https://www.ebi.ac.uk/QuickGO/GTerm?id=GO:0005795)
 
 ```{r}
