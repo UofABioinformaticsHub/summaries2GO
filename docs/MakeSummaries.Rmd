@@ -174,3 +174,10 @@ write_rds(goSummaries, "../data/goSummaries.RDS")
 
 The summaries obtained above can be downloaded from [here](../data/goSummaries.RDS).
 Place this in the appropriate folder and the object can then be imported using `read_rds("path/to/goSummaries.RDS")`
+
+## Session Info
+
+```{r sessionInfo, echo=FALSE}
+pander(sessionInfo())
+```
+
