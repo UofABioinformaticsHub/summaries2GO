@@ -1,0 +1,260 @@
+---
+title: "Make GO Summaries"
+author: "Steve Pederson"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,
+					  warning = FALSE, message = FALSE)
+```
+
+## Introduction
+
+```{r loadPackages}
+library(GO.db)
+library(graph)
+library(dnet)
+library(magrittr)
+library(tidyverse)
+library(pander)
+library(scales)
+library(plotly)
+library(limma)
+```
+
+The aim of this page is to keep an up-to-date summary of the Gene Ontology database, as represented in the R package `GO.db`.
+The information contained for each GO term is:
+
+- Which Ontology the GO term belongs to
+- The *shortest path* back to the root node of the relevant ontology
+- The *longest path* back to the root node of the relevant ontology
+- Whether the GO term is a *terminal node* (i.e. it has no children)
+
+The main object created is available for download  [here](https://github.com/UofABioinformaticsHub/summaries2GO/data/goSummaries.RDS?raw=true) and this will load as a `tibble` after using the function `read_rds()` (fro the package `readr`)
+
+## Create the Basic Graphs
+
+The package `AnnotationDbi` contains the function `makeGOGraph` which returns a `graphNEL` graph.
+In the following, we will:
+
+1. Create a graph for each ontology and remove the node `"all"` as this is essentially redundant
+2. Reverse the direction of the DAG for compatibility with tools in the package [`dnet`](https://cran.r-project.org/web/packages/dnet/index.html). Whilst hosted on CRAN, this package Depends on the bioconductor package [`supraHex`](https://www.bioconductor.org/packages/release/bioc/html/supraHex.html) and should be installed using `BiocManager::install("dnet")`
+
+Note that the following code can take several minutes to run as these are large graphs.
+
+```{r makeGraphs, cache=TRUE}
+graphs <- c(BP = "bp", CC = "cc", MF = "mf") %>%
+	lapply(makeGOGraph) %>%
+	lapply(function(x){removeNode("all", x)}) %>%
+	lapply(dDAGreverse)
+```
+
+```{r summariseGraphs, echo=FALSE}
+tibble(Ontology = names(graphs),
+	   Nodes = vapply(graphs, numNodes, integer(1)),
+	   Edges = vapply(graphs, function(x){
+	   	length(unlist(edgeL(x)))
+	   }, integer(1))) %>%
+	pander(caption = "Summary of graph sizes for each ontology",
+		   big.mark = ",")
+```
+
+
+## Find the Key Information
+
+```{r goSummaries, cache=TRUE}
+goSummaries <- lapply(graphs, function(x){
+	lng <- dDAGlevel(x, "longest_path") - 1
+	shrt <- dDAGlevel(x, "shortest_path") - 1
+	tips <- dDAGtip(x)
+	tibble(
+		id = unique(c(names(lng), names(shrt))),
+		shortest_path = shrt,
+		longest_path = lng,
+		terminal_node = id %in% tips
+		)
+}) %>%
+	bind_rows() %>%
+	mutate(ontology = Ontology(id))
+```
+
+```{r summarisePaths, echo=FALSE, fig.cap = "Path lengths for each ontology, based on whether a term is a terminal node or not."}
+goSummaries %>%
+	gather(key = "type", value = "path", contains("path")) %>%
+	ggplot(aes(terminal_node, path, fill = type)) +
+	geom_boxplot() +
+	facet_grid(type~ontology, scales = "free") +
+	labs(y = "Path Length") +
+	theme_bw()
+```
+
+```{r cumulativeTerms, echo=FALSE, fig.cap = "Cumulative number of GO Terms with paths $\\geq$ x."}
+goSummaries %>%
+	gather(key = "type", value = "path", contains("path")) %>%
+	arrange(path) %>%
+	group_by(ontology, type, path) %>%
+	tally() %>%
+	mutate(n = cumsum(n)) %>%
+	ggplot(aes(path, n, colour = ontology, linetype = type)) +
+	geom_line() +
+	labs(x = "Path Length",
+		 y = "Cumulative Number of GO Terms") +
+	scale_y_continuous(labels = comma) +
+	theme_bw()
+```
+
+## Examples
+
+In reality, we can just add this table to our GO analysis table from tools like `goana()` and use it to filter results before adjusting p-values.
+
+As an example of how to use this to assist our decision making, if we chose to remove GO terms with a shortest path $\leq$ 4, we can see how many terms we would keep and retain.
+
+```{r}
+ggplotly(goSummaries %>%
+	mutate(keep = shortest_path > 4) %>%
+	ggplot(aes(keep, fill = terminal_node)) +
+	geom_bar() +
+	facet_wrap(~ontology, nrow = 1) +
+	scale_y_continuous(labels = comma) +
+	labs(x = "Term Retained", y = "Total") +
+	theme_bw())
+```
+
+```{r}
+goSummaries %>%
+	mutate(keep = shortest_path > 4) %>%
+	group_by(ontology, terminal_node, keep) %>%
+	tally() %>%
+	spread(key = keep, value = n) %>%
+	rename(Discard = `FALSE`,
+		   Retain = `TRUE`) %>%
+	bind_rows(
+		tibble(ontology = "**Total**",
+			   Discard = sum(.$Discard),
+			   Retain = sum(.$Retain))) %>%
+	pander(big.mark = ",",
+		   justify = "llrr")
+```
+
+Alternatively, we could remove GO terms with a longest path back to the root node is $\leq 5$ steps.
+
+```{r}
+ggplotly(goSummaries %>%
+	mutate(keep = longest_path > 5) %>%
+	ggplot(aes(keep, fill = terminal_node)) +
+	geom_bar() +
+	facet_wrap(~ontology, nrow = 1) +
+	scale_y_continuous(labels = comma) +
+	labs(x = "Term Retained", y = "Total") +
+	theme_bw())
+```
+
+```{r}
+goSummaries %>%
+	mutate(keep = longest_path > 5) %>%
+	group_by(ontology, terminal_node, keep) %>%
+	tally() %>%
+	spread(key = keep, value = n) %>%
+	rename(Discard = `FALSE`,
+		   Retain = `TRUE`) %>%
+	bind_rows(
+		tibble(ontology = "**Total**",
+			   Discard = sum(.$Discard),
+			   Retain = sum(.$Retain))) %>%
+	pander(big.mark = ",",
+		   justify = "llrr")
+```
+
+
+
+```{r, echo=FALSE}
+write_rds(goSummaries, "data/goSummaries.RDS")
+```
+
+The summaries obtained above can be downloaded from [here](https://github.com/UofABioinformaticsHub/summaries2GO/data/goSummaries.RDS?raw=true).
+Place this in the appropriate folder and the object can then be imported using `read_rds("path/to/goSummaries.RDS")`
+
+## Use with `goana`
+
+As an artificial example, let's use a subset of the genes associated with `GO:0005795` (Golgi Stack) as a pretend set of DE genes.
+
+```{r}
+library(org.Hs.eg.db)
+set.seed(65)
+myDE <- get("GO:0005795", org.Hs.egGO2ALLEGS) %>% sample(50)
+goResults <- goana(myDE, species = "Hs")
+```
+
+If we leave these as is, there will be a few high=level GO terms which are relatively meaningless, as well as GO terms not present in our DE genes.
+These can easily be seen at the top of [the Ancestor Chart for this term](https://www.ebi.ac.uk/QuickGO/GTerm?id=GO:0005795)
+
+```{r}
+goResults %>%
+ 	rownames_to_column("id") %>%
+ 	as_tibble() %>%
+ 	arrange(P.DE) %>% 
+	mutate(adjP = p.adjust(P.DE, "bonferroni"),
+		   FDR = p.adjust(P.DE, "fdr")) %>%
+	slice(1:10) %>%
+	pander(caption = "Unfiltered results for GO analysis",
+		   justify = "lllrrrrr",
+		   plain.ascii = TRUE,
+		   split.tables = Inf)
+```
+
+
+I usually like to rearrange mine as a `tibble` and do some filtering as well.
+In the following we'll:
+
+- Arrange by P value
+- Add the information from goSummaries
+- Remove GO terms not represented in our DE genes
+- Restrict our results to a specific subset based on distance from the root node
+- Adjust p-values
+
+```{r filteredGO}
+filteredGO <- goResults %>%
+	rownames_to_column("id") %>%
+	as_tibble() %>%
+	arrange(P.DE) %>%
+	left_join(goSummaries) %>%
+	filter(DE > 0) %>%
+	filter(shortest_path > 4) %>%
+	mutate(adjP = p.adjust(P.DE, "bonferroni"),
+		   FDR = p.adjust(P.DE, "fdr"))
+```
+
+Now we have removed some of the redundant terms, we can just look at the top 10.
+
+```{r, echo=FALSE}
+filteredGO %>%
+	dplyr::select(id, Term, Ont, N, DE, P.DE, adjP, FDR) %>%
+	slice(1:10) %>%
+	pander(caption = "Top 10 terms for GO analysis after filtering",
+		   justify = "lllrrrrr",
+		   plain.ascii = TRUE,
+		   split.tables = Inf)
+```
+
+Or we could find which terminal nodes are significant, as these may be especially informative.
+
+```{r}
+filteredGO %>%
+	filter(adjP < 0.05, terminal_node) %>%
+	dplyr::select(id, Term, Ont, N, DE, P.DE, adjP, FDR) %>%
+	pander(caption = "Significant GO terms with no Child Terms",
+		   justify = "lllrrrrr",
+		   plain.ascii = TRUE,
+		   split.tables = Inf)
+```
+
+Note that we just randomly grabbed 50 genes from `GO:0005795`, so this may also highlight issues with the general GO analytic approach and being cautious about low-level terms with only a small number of genes.
+
+## Session Info
+
+```{r sessionInfo, echo=FALSE}
+pander(sessionInfo())
+```
+
