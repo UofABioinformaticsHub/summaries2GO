@@ -207,7 +207,6 @@ goResults %>%
 	slice(1:10) %>%
 	pander(caption = "Unfiltered results for GO analysis",
 		   justify = "lllrrrrr",
-		   plain.ascii = TRUE,
 		   split.tables = Inf)
 ```
 
@@ -241,7 +240,6 @@ filteredGO %>%
 	slice(1:10) %>%
 	pander(caption = "Top 10 terms for GO analysis after filtering",
 		   justify = "lllrrrrr",
-		   plain.ascii = TRUE,
 		   split.tables = Inf)
 ```
 
@@ -253,7 +251,6 @@ filteredGO %>%
 	dplyr::select(id, Term, Ont, N, DE, P.DE, adjP, FDR) %>%
 	pander(caption = "Significant GO terms with no Child Terms",
 		   justify = "lllrrrrr",
-		   plain.ascii = TRUE,
 		   split.tables = Inf)
 ```
 
