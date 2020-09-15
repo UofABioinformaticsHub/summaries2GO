@@ -59,13 +59,17 @@ graphs <- c(BP = "bp", CC = "cc", MF = "mf") %>%
 ```
 
 ```{r summariseGraphs, echo=FALSE}
-tibble(Ontology = names(graphs),
-	   Nodes = vapply(graphs, numNodes, integer(1)),
-	   Edges = vapply(graphs, function(x){
-	   	length(unlist(edgeL(x)))
-	   }, integer(1))) %>%
-	pander(caption = "Summary of graph sizes for each ontology",
-		   big.mark = ",")
+tibble(
+	Ontology = names(graphs),
+	Nodes = vapply(graphs, numNodes, integer(1)),
+	Edges = vapply(graphs, function(x){
+		length(unlist(edgeL(x)))
+	}, integer(1))
+) %>%
+	pander(
+		caption = "Summary of graph sizes for each ontology",
+		big.mark = ","
+	)
 ```
 
 
